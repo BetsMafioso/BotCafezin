@@ -5,6 +5,8 @@ import asyncio
 import time
 import os
 from dotenv import load_dotenv
+import os
+import tempfile
 
 # =========================
 # LOAD ENV
@@ -64,11 +66,22 @@ def get_state(guild_id):
 # YTDLP / FFMPEG
 # =========================
 
-ytdlp_opts = {
-    "format": "bestaudio/best",
-    "default_search": "ytsearch",
-    "quiet": True,
-}
+def get_ytdlp_opts():
+    opts = {
+        "format": "bestaudio/best",
+        "default_search": "ytsearch",
+        "quiet": True,
+    }
+
+    cookies = os.getenv("YTDLP_COOKIES")
+    if cookies:
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.write(cookies.encode("utf-8"))
+        tmp.close()
+        opts["cookiefile"] = tmp.name
+
+    return opts
+
 
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
@@ -265,7 +278,7 @@ async def play(ctx, *, query):
     state.channel = ctx.channel
     state.messages.append(ctx.message)
 
-    with yt_dlp.YoutubeDL(ytdlp_opts) as ydl:
+    with yt_dlp.YoutubeDL(get_ytdlp_opts()) as ydl:
         info = ydl.extract_info(query, download=False)
 
         if "entries" in info:
