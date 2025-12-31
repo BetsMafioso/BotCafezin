@@ -68,9 +68,14 @@ def get_state(guild_id):
 
 def get_ytdlp_opts():
     opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio[protocol!=m3u8]/bestaudio/best",
         "default_search": "ytsearch",
         "quiet": True,
+        "nocheckcertificate": True,
+        "ignoreerrors": True,
+        "geo_bypass": True,
+        "extract_flat": False,
+        "source_address": "0.0.0.0",
     }
 
     cookies = os.getenv("YTDLP_COOKIES")
@@ -83,10 +88,12 @@ def get_ytdlp_opts():
     return opts
 
 
+
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
-    "options": "-vn"
+    "options": "-vn -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
 }
+
 
 # =========================
 # EMBED
