@@ -121,11 +121,11 @@ ffmpeg_opts = {
         "-reconnect 1 "
         "-reconnect_streamed 1 "
         "-reconnect_delay_max 5 "
-        "-protocol_whitelist file,http,https,tcp,tls,crypto "
-        "-allowed_extensions ALL"
+        "-protocol_whitelist file,http,https,tcp,tls,crypto"
     ),
     "options": "-vn"
 }
+
 
 
 # =========================
