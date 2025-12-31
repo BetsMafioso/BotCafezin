@@ -117,7 +117,14 @@ def ytdlp_youtube_opts():
 
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
-    "options": "-vn -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+    "before_options": (
+        "-reconnect 1 "
+        "-reconnect_streamed 1 "
+        "-reconnect_delay_max 5 "
+        "-protocol_whitelist file,http,https,tcp,tls,crypto "
+        "-allowed_extensions ALL"
+    ),
+    "options": "-vn"
 }
 
 # =========================
