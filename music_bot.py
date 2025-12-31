@@ -4,9 +4,8 @@ import yt_dlp
 import asyncio
 import time
 import os
-from dotenv import load_dotenv
-import os
 import tempfile
+from dotenv import load_dotenv
 
 # =========================
 # LOAD ENV
@@ -36,6 +35,13 @@ def format_time(seconds):
     h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
+def error_embed(title, desc):
+    return discord.Embed(
+        title=f"❌ {title}",
+        description=desc,
+        color=discord.Color.red()
+    )
+
 # =========================
 # ESTADO
 # =========================
@@ -45,10 +51,8 @@ class MusicState:
         self.queue = []
         self.history = []
         self.current = None
-
         self.loop_song = False
         self.loop_queue = False
-
         self.channel = None
         self.player_message = None
         self.start_time = None
@@ -63,21 +67,32 @@ def get_state(guild_id):
     return states[guild_id]
 
 # =========================
-# YTDLP / FFMPEG
+# YTDLP CONFIG
 # =========================
 
-def get_ytdlp_opts():
+def ytdlp_base_opts():
     opts = {
         "format": "bestaudio[protocol!=m3u8]/bestaudio/best",
-        "default_search": "ytsearch",
         "quiet": True,
         "nocheckcertificate": True,
         "ignoreerrors": True,
         "geo_bypass": True,
-        "extract_flat": False,
         "source_address": "0.0.0.0",
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web"],
+                "skip": ["dash", "hls"]
+            }
+        }
     }
 
+    # =========================
+    # YOUTUBE COOKIES (OPCIONAL)
+    # =========================
     cookies = os.getenv("YTDLP_COOKIES")
     if cookies:
         tmp = tempfile.NamedTemporaryFile(delete=False)
@@ -89,14 +104,24 @@ def get_ytdlp_opts():
 
 
 
+def ytdlp_soundcloud_opts():
+    opts = ytdlp_base_opts()
+    opts["default_search"] = "scsearch"
+    return opts
+
+
+def ytdlp_youtube_opts():
+    opts = ytdlp_base_opts()
+    opts["default_search"] = "ytsearch"
+    return opts
+
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
     "options": "-vn -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
 }
 
-
 # =========================
-# EMBED
+# EMBED PLAYER
 # =========================
 
 def build_embed(state):
@@ -109,7 +134,8 @@ def build_embed(state):
         color=discord.Color.green()
     )
 
-    embed.set_thumbnail(url=thumb)
+    if thumb:
+        embed.set_thumbnail(url=thumb)
 
     embed.add_field(
         name="⏱ Tempo",
@@ -132,7 +158,7 @@ def build_embed(state):
     return embed
 
 # =========================
-# ATUALIZAR TEMPO
+# UPDATE EMBED
 # =========================
 
 async def update_embed_loop(guild):
@@ -145,7 +171,7 @@ async def update_embed_loop(guild):
         await asyncio.sleep(5)
 
 # =========================
-# LIMPEZA
+# CLEANUP
 # =========================
 
 async def cleanup(state):
@@ -178,7 +204,7 @@ async def play_next(guild):
         return
 
     if state.loop_song and state.current:
-        next_song = state.current
+        song = state.current
     else:
         if not state.queue:
             if state.loop_queue and state.history:
@@ -187,13 +213,13 @@ async def play_next(guild):
             else:
                 await cleanup(state)
                 return
-        next_song = state.queue.pop(0)
+        song = state.queue.pop(0)
 
-    state.current = next_song
-    state.history.append(next_song)
+    state.current = song
+    state.history.append(song)
     state.start_time = time.time()
 
-    url, _, _, _ = state.current
+    url, _, _, _ = song
 
     vc.play(
         discord.FFmpegPCMAudio(url, **ffmpeg_opts),
@@ -212,12 +238,12 @@ async def play_next(guild):
         embed=build_embed(state),
         view=MusicControls(guild)
     )
-    state.messages.append(state.player_message)
 
+    state.messages.append(state.player_message)
     state.update_task = bot.loop.create_task(update_embed_loop(guild))
 
 # =========================
-# BOTÕES
+# CONTROLS
 # =========================
 
 class MusicControls(discord.ui.View):
@@ -231,10 +257,7 @@ class MusicControls(discord.ui.View):
     async def pause(self, interaction, _):
         await interaction.response.defer()
         vc = self.guild.voice_client
-        if vc.is_playing():
-            vc.pause()
-        else:
-            vc.resume()
+        vc.pause() if vc.is_playing() else vc.resume()
 
     @discord.ui.button(emoji="⏭", style=discord.ButtonStyle.blurple)
     async def skip(self, interaction, _):
@@ -256,27 +279,21 @@ class MusicControls(discord.ui.View):
         await self.guild.voice_client.disconnect()
 
 # =========================
-# COMANDOS
+# COMMANDS
 # =========================
 
 @bot.command()
 async def play(ctx, *, query):
     if ctx.channel.id != MUSIC_CHANNEL_ID:
-        embed = discord.Embed(
-            title="❌ Comando não permitido aqui",
-            description=f"Use <#{MUSIC_CHANNEL_ID}> para comandos de música",
-            color=discord.Color.red()
+        return await ctx.send(
+            embed=error_embed(
+                "Canal errado",
+                f"Use <#{MUSIC_CHANNEL_ID}> para comandos de música 🎧"
+            )
         )
-
-        embed.set_footer(
-            text="🎧 Para o sistema de música • Use o canal correto",
-            icon_url=ctx.guild.icon.url if ctx.guild.icon else None
-        )
-
-        return await ctx.send(embed=embed)
 
     if not ctx.author.voice:
-        return await ctx.send("❌ Entre em um canal de voz")
+        return await ctx.send(embed=error_embed("Entre em um canal de voz", "Você precisa estar em um canal de voz."))
 
     if ctx.voice_client is None:
         await ctx.author.voice.channel.connect()
@@ -285,27 +302,47 @@ async def play(ctx, *, query):
     state.channel = ctx.channel
     state.messages.append(ctx.message)
 
-    with yt_dlp.YoutubeDL(get_ytdlp_opts()) as ydl:
-        info = ydl.extract_info(query, download=False)
+    info = None
 
-        if "entries" in info:
-            for e in info["entries"]:
+    # 🔊 SoundCloud PRIMEIRO
+    try:
+        with yt_dlp.YoutubeDL(ytdlp_soundcloud_opts()) as ydl:
+            info = ydl.extract_info(query, download=False)
+    except:
+        pass
+
+    # ▶️ YouTube BACKUP
+    if not info:
+        try:
+            with yt_dlp.YoutubeDL(ytdlp_youtube_opts()) as ydl:
+                info = ydl.extract_info(query, download=False)
+        except:
+            return await ctx.send(
+                embed=error_embed(
+                    "Falha ao carregar",
+                    "Não consegui tocar essa música nem pelo SoundCloud nem pelo YouTube 😢"
+                )
+            )
+
+    if "entries" in info:
+        for e in info["entries"]:
+            if e:
                 state.queue.append((e["url"], e["title"], e.get("thumbnail"), e.get("duration")))
-        else:
-            state.queue.append((info["url"], info["title"], info.get("thumbnail"), info.get("duration")))
+    else:
+        state.queue.append((info["url"], info["title"], info.get("thumbnail"), info.get("duration")))
 
     if not ctx.voice_client.is_playing():
         await play_next(ctx.guild)
     else:
-        msg = await ctx.send("➕ Música(s) adicionada(s) à fila")
+        msg = await ctx.send("➕ Música adicionada à fila")
         state.messages.append(msg)
 
 @bot.command()
 async def loop(ctx):
     state = get_state(ctx.guild.id)
 
-    if len(state.queue) < 1:
-        return await ctx.send("❌ Loop só funciona com playlist")
+    if not state.queue:
+        return await ctx.send(embed=error_embed("Loop inválido", "O loop só funciona com playlist."))
 
     state.loop_queue = not state.loop_queue
     await ctx.send(f"🔁 Loop da playlist {'ativado' if state.loop_queue else 'desativado'}")
