@@ -1,31 +1,29 @@
 FROM python:3.12-slim
 
 # =========================
-# System deps
+# INSTALAR FFMPEG COMPLETO
 # =========================
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    ca-certificates \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # =========================
-# Workdir
+# DIRETÓRIO
 # =========================
 WORKDIR /app
 
 # =========================
-# Python deps
+# DEPENDÊNCIAS
 # =========================
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # =========================
-# App files
+# CÓDIGO
 # =========================
 COPY . .
 
 # =========================
-# Run bot
+# START
 # =========================
 CMD ["python", "music_bot.py"]

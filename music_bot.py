@@ -116,7 +116,7 @@ def ytdlp_youtube_opts():
     return opts
 
 ffmpeg_opts = {
-    "executable": FFMPEG_PATH,
+    "executable": "ffmpeg",
     "before_options": (
         "-reconnect 1 "
         "-reconnect_streamed 1 "
@@ -126,6 +126,7 @@ ffmpeg_opts = {
     ),
     "options": "-vn"
 }
+
 
 # =========================
 # EMBED PLAYER
